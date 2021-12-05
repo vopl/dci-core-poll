@@ -10,6 +10,9 @@
 #include <dci/cmt/task/owner.hpp>
 #include <dci/cmt/raisable.hpp>
 #include <dci/sbs/wire.hpp>
+#include <dci/poll/descriptor/native.hpp>
+#include <dci/poll/descriptor/readyStateFlags.hpp>
+#include <dci/utils/intrusiveDlist.hpp>
 #include <system_error>
 #include <memory>
 
@@ -18,19 +21,24 @@ namespace dci::poll::impl
     class Polling;
 
     class Descriptor final
+        : public utils::IntrusiveDlistElement<Descriptor>
     {
         Descriptor(const Descriptor&) = delete;
         void operator=(const Descriptor&) = delete;
 
     public:
-        Descriptor(int fd, cmt::task::Owner* actOwner, cmt::Raisable* raisable);
+        using Native = descriptor::Native;
+        using ReadyStateFlags = descriptor::ReadyStateFlags;
+
+    public:
+        Descriptor(Native native, cmt::task::Owner* readyOwner, cmt::Raisable* raisable);
         ~Descriptor();
 
-        sbs::Signal<void, int /*fd*/, std::uint_fast32_t /*readyState*/> onAct();
-        void emitActIfNeed();
+        sbs::Signal<void, Native /*native*/, ReadyStateFlags /*readyState*/> ready();
+        void emitReadyIfNeed();
 
-        void setActOwner(cmt::task::Owner* actOwner);
-        void resetActOwner();
+        void setReadyOwner(cmt::task::Owner* readyOwner);
+        void resetReadyOwner();
 
         void setRaisable(cmt::Raisable* raisable);
         void resetRaisable();
@@ -38,46 +46,42 @@ namespace dci::poll::impl
         bool valid() const;
         std::error_code error();
 
-        int fd() const;
+        Native native() const;
 
         std::error_code close(bool withUninstall = true);
 
-        std::error_code attach(int fd);
+        std::error_code attach(Native native);
         std::error_code detach();
 
-        std::uint_fast32_t readyState() const;
-        void resetReadyState(std::uint_fast32_t flags);
+        ReadyStateFlags readyState() const;
+        void resetReadyState(ReadyStateFlags flags);
 
     public:
-        void setReadyState(std::uint_fast32_t flags);//from polling engine
+        void setReadyState(ReadyStateFlags flags);//from polling engine
 
     private:
         std::error_code install();
         std::error_code uninstall();
 
     private:
-        friend class Polling;
-        Descriptor* _nextInEngine{};
-        Descriptor* _prevInEngine{};
+        Native                                      _native;
+        ReadyStateFlags                             _readyState{};
 
-    private:
-        int                                         _fd;
-
-        std::uint_fast32_t                          _readyState{};
-
-        struct OnAct
+        struct Ready
         {
-            Descriptor* _owner;
-            bool _inProgress{};
-            sbs::Wire<void, int, std::uint_fast32_t> _wire;
+            Descriptor*                                 _owner;
+            bool                                        _inProgress{};
+            sbs::Wire<void, Native, ReadyStateFlags>    _wire;
 
-            OnAct(Descriptor* owner) : _owner{owner} {}
+            Ready(Descriptor* owner) : _owner{owner} {}
         };
-        using OnActPtr = std::shared_ptr<OnAct>;
-        OnActPtr _onAct{std::make_shared<OnAct>(this)};
+        using ReadyPtr = std::shared_ptr<Ready>;
+        ReadyPtr                                    _ready{std::make_shared<Ready>(this)};
 
-        cmt::task::Owner*                           _actOwner {};
-        cmt::task::Owner                            _localActOwner{};
+        cmt::task::Owner*                           _readyOwner {};
+        cmt::task::Owner                            _localReadyOwner{};
         cmt::Raisable*                              _raisable{};
+
+        long long stub[5];
     };
 }

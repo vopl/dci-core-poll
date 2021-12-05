@@ -22,6 +22,8 @@ namespace dci::poll
         not_initialized,
         not_stopped,
         bad_descriptor,
+        already_installed,
+        not_installed,
     };
 
     API_DCI_POLL const std::error_category& error_category();

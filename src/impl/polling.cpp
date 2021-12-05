@@ -21,12 +21,11 @@ namespace dci::poll::impl
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
     Polling::~Polling()
     {
-        while(_descriptors)
+        _descriptors.flush([](Descriptor* d)
         {
-            _descriptors->close(false);
-            _descriptors->setReadyState(poll::Descriptor::rsf_error);
-            _descriptors = _descriptors->_nextInEngine;
-        }
+            d->close(false);
+            d->setReadyState(descriptor::rsf_error);
+        });
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -51,19 +50,8 @@ namespace dci::poll::impl
             return ec;
         }
 
-        dbgAssert(!d->_nextInEngine);
-        dbgAssert(!d->_prevInEngine);
-        if(!_descriptors)
-        {
-            _descriptors = d;
-        }
-        else
-        {
-            dbgAssert(!_descriptors->_prevInEngine);
-            _descriptors->_prevInEngine = d;
-            d->_nextInEngine = _descriptors;
-            _descriptors = d;
-        }
+        dbgAssert(!_descriptors.contains(d));
+        _descriptors.push(d);
 
         return ec;
     }
@@ -73,31 +61,9 @@ namespace dci::poll::impl
     {
         std::error_code ec = _engine.uninstallDescriptor(d);
 
-        if(d->_nextInEngine || d->_prevInEngine || d == _descriptors)
+        if(d->_next)
         {
-            if(d == _descriptors)
-            {
-                if(d->_prevInEngine)
-                {
-                    _descriptors = d->_prevInEngine;
-                }
-                else
-                {
-                    _descriptors = d->_nextInEngine;
-                }
-            }
-
-            if(d->_nextInEngine)
-            {
-                d->_nextInEngine->_prevInEngine = d->_prevInEngine;
-            }
-            if(d->_prevInEngine)
-            {
-                d->_prevInEngine->_nextInEngine = d->_nextInEngine;
-            }
-
-            d->_nextInEngine = nullptr;
-            d->_prevInEngine = nullptr;
+            _descriptors.remove(d);
         }
 
         return ec;
@@ -110,9 +76,9 @@ namespace dci::poll::impl
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    std::error_code Polling::interrupt()
+    std::error_code Polling::wakeup()
     {
-        return _engine.interrupt();
+        return _engine.wakeup();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -124,6 +90,6 @@ namespace dci::poll::impl
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
     bool Polling::hasPayload() const
     {
-        return !!_descriptors;
+        return !_descriptors.empty();
     }
 }

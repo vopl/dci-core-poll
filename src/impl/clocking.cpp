@@ -193,7 +193,7 @@ namespace dci::poll::impl
 
         if(!bucket)
         {
-            bucket.reset(new clocking::Bucket(&_amount, index, calculateBucketStart(index)));
+            bucket.reset(new clocking::Bucket{&_amount, index, calculateBucketStart(index)});
         }
 
         return bucket.get();

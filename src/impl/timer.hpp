@@ -39,7 +39,7 @@ namespace dci::poll::impl
 
         ~Timer();
 
-        sbs::Signal<> onTick();
+        sbs::Signal<> tick();
 
         void setTickOwner(cmt::task::Owner* tickOwner);
         void resetTickOwner();
@@ -70,13 +70,13 @@ namespace dci::poll::impl
 
         bool                _started{};
 
-        struct OnTick
+        struct Tick
         {
             bool _inProgress{};
             sbs::Wire<> _wire;
         };
-        using OnTickPtr = std::shared_ptr<OnTick>;
-        OnTickPtr _onTick{std::make_shared<OnTick>()};
+        using TickPtr = std::shared_ptr<Tick>;
+        TickPtr _tick{std::make_shared<Tick>()};
 
         cmt::task::Owner*   _tickOwner{};
         cmt::task::Owner    _localTickOwner{};

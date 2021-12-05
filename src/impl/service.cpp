@@ -29,7 +29,7 @@ namespace dci::poll::impl
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    std::error_code Service::run()
+    std::error_code Service::run(bool emitStartedStopped)
     {
         if(!_stop)
         {
@@ -43,27 +43,45 @@ namespace dci::poll::impl
 
         _stop = false;
 
+        if(emitStartedStopped)
+        {
+            _started.in();
+        }
+
+        std::size_t workWithoutPollingCount{};
         while(!_stop)
         {
-            _onWorkPossible.in();
+            ++workWithoutPollingCount;
+            _workPossible.in();
 
-            if(_clocking.fireTicks())
+            if(_clocking.fireTicks() && workWithoutPollingCount < 50)
             {
                 continue;
             }
 
-            if(!_polling.hasPayload() && !_clocking.hasPayload())
+            if(_awaking.woken() && workWithoutPollingCount < 50)
+            {
+                continue;
+            }
+
+            if(!_polling.hasPayload() && !_clocking.hasPayload() && !_awaking.hasPayload())
             {
                 _stop = true;
                 break;
             }
 
             auto timeout = std::chrono::duration_cast<std::chrono::milliseconds>(_clocking.distance2NextPoint());
+            if(!timeout.count() && workWithoutPollingCount < 5)
+            {
+                continue;
+            }
+            workWithoutPollingCount = 0;
             auto ec = _polling.execute(timeout);
             if(ec)
             {
                 if(ec == std::errc::interrupted)
                 {
+                    _awaking.woken();
                     continue;
                 }
 
@@ -72,25 +90,35 @@ namespace dci::poll::impl
                     break;
                 }
 
+                if(emitStartedStopped)
+                {
+                    _stopped.in();
+                }
+
                 return ec;
             }
         }
 
-        _onWorkPossible.in();
+        _workPossible.in();
+
+        if(emitStartedStopped)
+        {
+            _stopped.in();
+        }
 
         return std::error_code{};
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    sbs::Signal<> Service::onWorkPossible()
+    sbs::Signal<> Service::started()
     {
-        return _onWorkPossible.out();
+        return _started.out();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    void Service::interrupt()
+    sbs::Signal<> Service::workPossible()
     {
-        _polling.interrupt();
+        return _workPossible.out();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -102,7 +130,13 @@ namespace dci::poll::impl
         }
 
         _stop = true;
-        return _polling.interrupt();
+        return _polling.wakeup();
+    }
+
+    /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
+    sbs::Signal<> Service::stopped()
+    {
+        return _stopped.out();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -129,5 +163,16 @@ namespace dci::poll::impl
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    Service service;
+    Awaking& Service::awaking()
+    {
+        return _awaking;
+    }
+
+    /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
+    namespace
+    {
+        std::aligned_storage_t<sizeof(Service), alignof(Service)> servicePlace;
+    }
+
+    Service& service{*(new (&servicePlace) Service)};
 }

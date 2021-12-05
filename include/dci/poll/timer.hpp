@@ -40,7 +40,7 @@ namespace dci::poll
 
         ~Timer();
 
-        sbs::Signal<> onTick();
+        sbs::Signal<> tick();
 
         void setTickOwner(cmt::task::Owner* owner);
         void resetTickOwner();
@@ -66,13 +66,13 @@ namespace dci::poll
     Timer::Timer(std::chrono::milliseconds interval, auto&& onTick, cmt::task::Owner* tickOwner) requires(std::invocable<decltype(onTick)&&>)
         : Timer{interval, tickOwner}
     {
-        this->onTick() += std::forward<decltype(onTick)>(onTick);
+        this->tick() += std::forward<decltype(onTick)>(onTick);
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
     Timer::Timer(std::chrono::milliseconds interval, bool repeatable, auto&& onTick, cmt::task::Owner* tickOwner) requires(std::invocable<decltype(onTick)&&>)
         : Timer{interval, repeatable, tickOwner}
     {
-        this->onTick() += std::forward<decltype(onTick)>(onTick);
+        this->tick() += std::forward<decltype(onTick)>(onTick);
     }
 }

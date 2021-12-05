@@ -8,7 +8,7 @@
 #include <dci/test.hpp>
 #include <dci/poll.hpp>
 #include <dci/cmt.hpp>
-#include "complexRun.hpp"
+#include "utils/complexRun.hpp"
 
 using namespace dci::poll;
 
@@ -82,7 +82,7 @@ TEST(poll, timer)
         } state;
 
         Timer t{std::chrono::hours{0}};
-        t.onTick() += [&]()
+        t.tick() += [&]()
         {
             state.cnt++;
             state.e.raise();
@@ -109,14 +109,14 @@ TEST(poll, timer)
         } state;
 
         Timer t1{std::chrono::milliseconds{1}};
-        t1.onTick() += [&]()
+        t1.tick() += [&]()
         {
             state.cnt++;
             state.e1.raise();
         };
 
         Timer t2{std::chrono::milliseconds{2}};
-        t2.onTick() += [&]()
+        t2.tick() += [&]()
         {
             state.cnt++;
             state.e2.raise();
@@ -166,7 +166,7 @@ TEST(poll, timer)
             state.e.raise();
         };
 
-        state.t1.onTick() += cb;
+        state.t1.tick() += cb;
 
         state.t1.start();
 
@@ -215,8 +215,8 @@ TEST(poll, timer)
             }
         };
 
-        state.t1.onTick() += cb;
-        state.t2.onTick() += cb;
+        state.t1.tick() += cb;
+        state.t2.tick() += cb;
 
         state.t1.start();
         state.t2.start();
@@ -278,8 +278,8 @@ TEST(poll, timer)
             }
         };
 
-        state.t1.onTick() += cb;
-        state.t2.onTick() += cb;
+        state.t1.tick() += cb;
+        state.t2.tick() += cb;
 
         state.t1.start();
         state.t2.start();
@@ -292,7 +292,7 @@ TEST(poll, timer)
         EXPECT_FALSE(state.t2.started());
     };
 
-    complexRun();
+    utils::complexRun();
 
     EXPECT_EQ(scopeRaiiCounter, 0);
 }

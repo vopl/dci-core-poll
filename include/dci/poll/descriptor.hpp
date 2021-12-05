@@ -13,6 +13,8 @@
 #include <dci/cmt/task/owner.hpp>
 #include <dci/cmt/raisable.hpp>
 #include <dci/sbs/signal.hpp>
+#include "descriptor/native.hpp"
+#include "descriptor/readyStateFlags.hpp"
 
 namespace dci::poll
 {
@@ -23,30 +25,21 @@ namespace dci::poll
         void operator=(const Descriptor&) = delete;
 
     public:
-        enum ReadyStateFlags : std::uint_fast32_t
-        {
-            rsf_read    = 0x001,
-            rsf_pri     = 0x002,
-            rsf_write   = 0x004,
-
-            rsf_error   = 0x010,
-
-            rsf_eof     = 0x100,
-            rsf_close   = 0x200,
-        };
+        using Native = descriptor::Native;
+        using ReadyStateFlags = descriptor::ReadyStateFlags;
 
     public:
-        Descriptor(int fd=-1);
-        Descriptor(int fd, auto&& onAct, cmt::task::Owner* actOwner = nullptr) requires(std::invocable<decltype(onAct)&&, int, std::uint_fast32_t>);
-        Descriptor(int fd, cmt::task::Owner* actOwner);
-        Descriptor(int fd, cmt::Raisable* raisable);
+        Descriptor(Native native = {});
+        Descriptor(Native native, auto&& onReady, cmt::task::Owner* readyOwner = nullptr) requires(std::invocable<decltype(onReady)&&, Native, ReadyStateFlags>);
+        Descriptor(Native native, cmt::task::Owner* readyOwner);
+        Descriptor(Native native, cmt::Raisable* raisable);
         ~Descriptor();
 
-        sbs::Signal<void, int /*fd*/, std::uint_fast32_t /*readyState*/> onAct();
-        void emitActIfNeed();
+        sbs::Signal<void, Native /*native*/, ReadyStateFlags /*readyState*/> ready();
+        void emitReadyIfNeed();
 
-        void setActOwner(cmt::task::Owner* actOwner);
-        void resetActOwner();
+        void setReadyOwner(cmt::task::Owner* readyOwner);
+        void resetReadyOwner();
 
         void setRaisable(cmt::Raisable* raisable);
         void resetRaisable();
@@ -54,22 +47,22 @@ namespace dci::poll
         bool valid() const;
         std::error_code error();
 
-        int fd() const;
-        operator int() const;
+        Native native() const;
+        operator Native() const;
 
         std::error_code close();
-        std::error_code attach(int fd);
+        std::error_code attach(Native native);
         std::error_code detach();
 
-        std::uint_fast32_t readyState() const;
-        void resetReadyState(std::uint_fast32_t flags);
+        ReadyStateFlags readyState() const;
+        void resetReadyState(ReadyStateFlags flags);
     };
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    Descriptor::Descriptor(int fd, auto&& onAct, cmt::task::Owner* actOwner) requires(std::invocable<decltype(onAct)&&, int, std::uint_fast32_t>)
-        : Descriptor{fd, actOwner}
+    Descriptor::Descriptor(Native native, auto&& onReady, cmt::task::Owner* readyOwner) requires(std::invocable<decltype(onReady)&&, descriptor::Native, descriptor::ReadyStateFlags>)
+        : Descriptor{native, readyOwner}
     {
-        this->onAct() += std::forward<decltype(onAct)>(onAct);
-        emitActIfNeed();
+        this->ready() += std::forward<decltype(onReady)>(onReady);
+        emitReadyIfNeed();
     }
 }

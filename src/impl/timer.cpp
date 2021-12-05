@@ -7,6 +7,7 @@
 
 #include "timer.hpp"
 #include "service.hpp"
+#include <dci/cmt/functions.hpp>
 #include <dci/utils/atScopeExit.hpp>
 
 namespace dci::poll::impl
@@ -30,10 +31,9 @@ namespace dci::poll::impl
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    sbs::Signal<> Timer::onTick()
+    sbs::Signal<> Timer::tick()
     {
-        auto pi = std::make_shared<int>();
-        return _onTick->_wire.out();
+        return _tick->_wire.out();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -225,12 +225,12 @@ namespace dci::poll::impl
             service.clocking().start(this);
         }
 
-        if(_onTick->_wire.connected() && !_onTick->_inProgress)
+        if(_tick->_wire.connected() && !_tick->_inProgress)
         {
-            _onTick->_inProgress = true;
-            cmt::spawn() += _tickOwner * [onTick{_onTick}, cleaner{dci::utils::AtScopeExit{[onTick=_onTick]{onTick->_inProgress=false;}}}]
+            _tick->_inProgress = true;
+            cmt::spawn() += _tickOwner * [tick{_tick}, cleaner{dci::utils::AtScopeExit{[tick=_tick]{tick->_inProgress=false;}}}]
             {
-                onTick->_wire.in();
+                tick->_wire.in();
             };
         }
 

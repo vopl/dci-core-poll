@@ -9,7 +9,13 @@
 
 #include "descriptor.hpp"
 
-#include "polling/epoll.hpp"
+#include <dci/utils/intrusiveDlist.hpp>
+
+#ifdef _WIN32
+#   include "polling/asyncSelect.hpp"
+#else
+#   include "polling/epoll.hpp"
+#endif
 
 #include <system_error>
 #include <chrono>
@@ -30,7 +36,7 @@ namespace dci::poll::impl
         std::error_code uninstallDescriptor(Descriptor* d);
 
         std::error_code execute(std::chrono::milliseconds timeout);
-        std::error_code interrupt();
+        std::error_code wakeup();
 
         std::error_code deinitialize();
 
@@ -38,7 +44,12 @@ namespace dci::poll::impl
         bool hasPayload() const;
 
     private:
-        Descriptor* _descriptors{nullptr};
-        polling::Epoll _engine;
+        utils::IntrusiveDlist<Descriptor> _descriptors;
+
+#ifdef _WIN32
+        polling::AsyncSelect    _engine;
+#else
+        polling::Epoll          _engine;
+#endif
     };
 }

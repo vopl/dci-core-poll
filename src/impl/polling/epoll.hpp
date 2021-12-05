@@ -10,8 +10,6 @@
 #include "../descriptor.hpp"
 #include "../clocking/config.hpp"
 
-#include <chrono>
-
 namespace dci::poll::impl::polling
 {
     class Epoll
@@ -28,13 +26,13 @@ namespace dci::poll::impl::polling
         std::error_code uninstallDescriptor(Descriptor* d);
 
         std::error_code execute(clocking::Duration timeout);
-        std::error_code interrupt();
+        std::error_code wakeup();
 
         std::error_code deinitialize();
 
     private:
         int _fd {-1};
-        int _interruptEvent {-1};
+        int _wakeupEvent {-1};
         char _eventsBuffer[8192];
     };
 }

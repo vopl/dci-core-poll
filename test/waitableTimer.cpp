@@ -8,7 +8,7 @@
 #include <dci/test.hpp>
 #include <dci/poll.hpp>
 #include <dci/cmt.hpp>
-#include "complexRun.hpp"
+#include "utils/complexRun.hpp"
 
 using namespace dci::poll;
 
@@ -55,7 +55,7 @@ TEST(poll, waitableTimer)
         dci::cmt::waitAll(t1, t2);
     };
 
-    complexRun();
+    utils::complexRun();
 
     EXPECT_EQ(scopeRaiiCounter, 0);
 }

@@ -70,8 +70,8 @@ TEST(poll, instance)
         };
 
         {
-            dci::sbs::Owner onWorkPossibleOwner;
-            dci::poll::onWorkPossible() += onWorkPossibleOwner * [&]
+            dci::sbs::Owner workPossibleOwner;
+            dci::poll::workPossible() += workPossibleOwner * [&]
             {
                 dci::cmt::executeReadyFibers();
             };

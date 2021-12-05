@@ -11,20 +11,20 @@
 namespace dci::poll
 {
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    Descriptor::Descriptor(int fd)
-        : FaceLayout{fd, nullptr, nullptr}
+    Descriptor::Descriptor(Native native)
+        : FaceLayout{native, nullptr, nullptr}
     {
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    Descriptor::Descriptor(int fd, cmt::task::Owner* actOwner)
-        : FaceLayout{fd, actOwner, nullptr}
+    Descriptor::Descriptor(Native native, cmt::task::Owner* actOwner)
+        : FaceLayout{native, actOwner, nullptr}
     {
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    Descriptor::Descriptor(int fd, cmt::Raisable* raisable)
-        : FaceLayout{fd, nullptr, raisable}
+    Descriptor::Descriptor(Native native, cmt::Raisable* raisable)
+        : FaceLayout{native, nullptr, raisable}
     {
     }
 
@@ -34,27 +34,27 @@ namespace dci::poll
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    sbs::Signal<void, int /*fd*/, std::uint_fast32_t /*readyState*/> Descriptor::onAct()
+    sbs::Signal<void, descriptor::Native /*native*/, descriptor::ReadyStateFlags /*readyState*/> Descriptor::ready()
     {
-        return impl().onAct();
+        return impl().ready();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    void Descriptor::emitActIfNeed()
+    void Descriptor::emitReadyIfNeed()
     {
-        return impl().emitActIfNeed();
+        return impl().emitReadyIfNeed();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    void Descriptor::setActOwner(cmt::task::Owner* actOwner)
+    void Descriptor::setReadyOwner(cmt::task::Owner* actOwner)
     {
-        return impl().setActOwner(actOwner);
+        return impl().setReadyOwner(actOwner);
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    void Descriptor::resetActOwner()
+    void Descriptor::resetReadyOwner()
     {
-        return impl().resetActOwner();
+        return impl().resetReadyOwner();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -82,15 +82,15 @@ namespace dci::poll
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    int Descriptor::fd() const
+    descriptor::Native Descriptor::native() const
     {
-        return impl().fd();
+        return impl().native();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    Descriptor::operator int() const
+    Descriptor::operator Native() const
     {
-        return impl().fd();
+        return impl().native();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -100,25 +100,25 @@ namespace dci::poll
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    std::error_code Descriptor::attach(int fd)
+    std::error_code Descriptor::attach(Native native)
     {
-        return impl().attach(fd);
+        return impl().attach(native);
     }
 
-/////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
+    /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
     std::error_code Descriptor::detach()
     {
         return impl().detach();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    std::uint_fast32_t Descriptor::readyState() const
+    descriptor::ReadyStateFlags Descriptor::readyState() const
     {
         return impl().readyState();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    void Descriptor::resetReadyState(std::uint_fast32_t flags)
+    void Descriptor::resetReadyState(ReadyStateFlags flags)
     {
         return impl().resetReadyState(flags);
     }

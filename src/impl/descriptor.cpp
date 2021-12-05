@@ -5,21 +5,34 @@
    of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
    You should have received a copy of the GNU Affero General Public License along with this program. If not, see <https://www.gnu.org/licenses/>. */
 
+#if __has_include(<Winsock2.h>)
+#   include <Winsock2.h>
+#endif
+
 #include "descriptor.hpp"
 #include "service.hpp"
 #include <dci/poll/descriptor.hpp>
 #include <dci/logger.hpp>
+#include <dci/cmt/functions.hpp>
 #include <dci/utils/atScopeExit.hpp>
+
+#ifdef _WIN32
+#   include <dci/utils/win32/error.hpp>
+#endif
+
 #include <unistd.h>
 #include <sys/types.h>
-#include <sys/socket.h>
+
+#if __has_include(<sys/socket.h>)
+#   include <sys/socket.h>
+#endif
 
 namespace dci::poll::impl
 {
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    Descriptor::Descriptor(int fd, cmt::task::Owner* actOwner, cmt::Raisable* raisable)
-        : _fd{fd}
-        , _actOwner{(actOwner ? actOwner : &_localActOwner)}
+    Descriptor::Descriptor(Native native, cmt::task::Owner* readyOwner, cmt::Raisable* raisable)
+        : _native{native}
+        , _readyOwner{(readyOwner ? readyOwner : &_localReadyOwner)}
         , _raisable{raisable}
     {
         if(valid())
@@ -27,7 +40,7 @@ namespace dci::poll::impl
             std::error_code ec = install();
             if(ec)
             {
-                setReadyState(poll::Descriptor::rsf_error);
+                setReadyState(descriptor::rsf_error);
                 close();
             }
         }
@@ -41,50 +54,54 @@ namespace dci::poll::impl
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
     Descriptor::~Descriptor()
     {
-        _onAct->_owner = {};
         close();
-        _localActOwner.stop(false);
+        _ready->_owner = {};
+        _ready.reset();
+        _localReadyOwner.stop(false);
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    sbs::Signal<void, int /*fd*/, std::uint_fast32_t /*readyState*/> Descriptor::onAct()
+    sbs::Signal<void, descriptor::Native /*native*/, descriptor::ReadyStateFlags /*readyState*/> Descriptor::ready()
     {
-        return _onAct->_wire.out();
+        return _ready->_wire.out();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    void Descriptor::emitActIfNeed()
+    void Descriptor::emitReadyIfNeed()
     {
-        if(_readyState && _onAct->_wire.connected() && !_onAct->_inProgress)
+        if(_readyState && _ready && _ready->_wire.connected() && !_ready->_inProgress)
         {
-            std::uint_fast32_t readyState = _readyState;
-            _readyState = 0;
-            _onAct->_inProgress = true;
-            cmt::spawn() += _actOwner * [fd{_fd}, readyState, onAct{_onAct}, cleaner{dci::utils::AtScopeExit{[onAct=_onAct]{onAct->_inProgress=false;}}}]
+            ReadyStateFlags readyState = _readyState;
+            _readyState = {};
+            _ready->_inProgress = true;
+            cmt::spawn() += _readyOwner * [native{_native}, readyState, ready{_ready}]
             {
-                onAct->_wire.in(fd, readyState);
+                {
+                    dci::utils::AtScopeExit cleaner{[&]{ready->_inProgress=false;}};
+                    ready->_wire.in(native, readyState);
+                }
 
-                if(onAct->_owner)
-                    onAct->_owner->emitActIfNeed();
+                if(ready->_owner)
+                    ready->_owner->emitReadyIfNeed();
             };
         }
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    void Descriptor::setActOwner(cmt::task::Owner* actOwner)
+    void Descriptor::setReadyOwner(cmt::task::Owner* readyOwner)
     {
-        if (actOwner != _actOwner)
+        if(readyOwner != _readyOwner)
         {
-            _actOwner->stop(false);
+            _readyOwner->stop(false);
         }
-        _actOwner = actOwner ? actOwner : &_localActOwner;
+        _readyOwner = readyOwner ? readyOwner : &_localReadyOwner;
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    void Descriptor::resetActOwner()
+    void Descriptor::resetReadyOwner()
     {
-        _localActOwner.stop(false);
-        _actOwner = &_localActOwner;
+        _localReadyOwner.stop(false);
+        _readyOwner = &_localReadyOwner;
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -107,26 +124,41 @@ namespace dci::poll::impl
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
     bool Descriptor::valid() const
     {
-        return 0 <= _fd;
+#ifdef _WIN32
+        return _native._value != _native._bad && !!_native._value;
+#else
+        return _native._value >= 0;
+#endif
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
     std::error_code Descriptor::error()
     {
+#ifdef _WIN32
+        int errcode = ENOTSOCK;
+        int errcodelen = sizeof(errcode);
+        if(SOCKET_ERROR == getsockopt(_native, SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&errcode), &errcodelen))
+        {
+            errcode = WSAGetLastError();
+        }
+
+        return utils::win32::error::make(errcode);
+#else
         int errcode = ENOTSOCK;
         socklen_t errcodelen = sizeof(errcode);
-        if(-1 == getsockopt(_fd, SOL_SOCKET, SO_ERROR, &errcode, &errcodelen))
+        if(-1 == getsockopt(_native, SOL_SOCKET, SO_ERROR, &errcode, &errcodelen))
         {
             errcode = errno;
         }
 
-        return std::error_code(errcode, std::generic_category());
+        return std::error_code{errcode, std::generic_category()};
+#endif
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    int Descriptor::fd() const
+    descriptor::Native Descriptor::native() const
     {
-        return _fd;
+        return _native;
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -140,32 +172,39 @@ namespace dci::poll::impl
                 ec = uninstall();
             }
 
-            int closeRes = ::close(_fd);
+#ifdef _WIN32
+            if(int closeRes = closesocket(_native))
+            {
+                ec = utils::win32::error::make(closeRes);
+            }
+#else
+            int closeRes = ::close(_native);
             while(0 != closeRes && EINTR == errno)
             {
                 //try again
-                closeRes = ::close(_fd);
+                closeRes = ::close(_native);
             }
 
             if(closeRes)
             {
                 ec = std::error_code{errno, std::generic_category()};
             }
-            _fd = -1;
-            _readyState &= ~(poll::Descriptor::rsf_read | poll::Descriptor::rsf_pri | poll::Descriptor::rsf_write);
+#endif
+            _native = {};
+            _readyState = _readyState & ~(descriptor::rsf_read | descriptor::rsf_pri | descriptor::rsf_write);
 
-            setReadyState(poll::Descriptor::rsf_close | poll::Descriptor::rsf_eof);
+            setReadyState(descriptor::rsf_close | descriptor::rsf_eof);
         }
 
         return ec;
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    std::error_code Descriptor::attach(int fd)
+    std::error_code Descriptor::attach(Native native)
     {
         close();
 
-        _fd = fd;
+        _native = native;
         _readyState = {};
 
         if(valid())
@@ -173,13 +212,13 @@ namespace dci::poll::impl
             std::error_code ec = install();
             if(ec)
             {
-                setReadyState(poll::Descriptor::rsf_error);
+                setReadyState(descriptor::rsf_error);
                 close();
                 return ec;
             }
         }
 
-        return std::error_code{};
+        return {};
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -190,7 +229,7 @@ namespace dci::poll::impl
         if(valid())
         {
             ec = uninstall();
-            _fd = -1;
+            _native = {};
             _readyState = {};
         }
 
@@ -198,23 +237,23 @@ namespace dci::poll::impl
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    std::uint_fast32_t Descriptor::readyState() const
+    descriptor::ReadyStateFlags Descriptor::readyState() const
     {
         return _readyState;
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    void Descriptor::resetReadyState(std::uint_fast32_t flags)
+    void Descriptor::resetReadyState(ReadyStateFlags flags)
     {
         _readyState &= ~flags;
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    void Descriptor::setReadyState(std::uint_fast32_t flags)
+    void Descriptor::setReadyState(ReadyStateFlags flags)
     {
         _readyState |= flags;
 
-        emitActIfNeed();
+        emitReadyIfNeed();
 
         if(_readyState && _raisable)
         {

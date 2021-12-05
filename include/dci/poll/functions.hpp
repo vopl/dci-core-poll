@@ -14,9 +14,10 @@
 namespace dci::poll
 {
     API_DCI_POLL std::error_code    initialize();
-    API_DCI_POLL std::error_code    run();
-    API_DCI_POLL sbs::Signal<>      onWorkPossible();
-    API_DCI_POLL void               interrupt();
+    API_DCI_POLL std::error_code    run(bool emitStartedStopped = true);
+    API_DCI_POLL sbs::Signal<>      started();
+    API_DCI_POLL sbs::Signal<>      workPossible();
     API_DCI_POLL std::error_code    stop();
+    API_DCI_POLL sbs::Signal<>      stopped();
     API_DCI_POLL std::error_code    deinitialize();
 }

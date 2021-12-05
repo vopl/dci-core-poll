@@ -8,14 +8,23 @@
 #include <dci/test.hpp>
 #include <dci/poll.hpp>
 #include <dci/cmt.hpp>
-#include "complexRun.hpp"
-
+#include "dci/poll/descriptor/native.hpp"
 using namespace dci::poll;
 
+#include "utils/complexRun.hpp"
+#include "utils/pipe.hpp"
+
 #include <sys/types.h>
-#include <sys/socket.h>
 #include <unistd.h>
 #include <fcntl.h>
+
+#if __has_include(<sys/socket.h>)
+#   include <sys/socket.h>
+#endif
+
+#if __has_include(<Winsock2.h>)
+#   include <Winsock2.h>
+#endif
 
 /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
 TEST(poll, descriptor_badFd)
@@ -23,32 +32,34 @@ TEST(poll, descriptor_badFd)
     //bad fd
     dci::cmt::spawn() += []
     {
-        int pipefd[2];
-        int i = pipe2(pipefd, O_NONBLOCK);
-        EXPECT_EQ(i, 0);
-        close(pipefd[0]);
-        close(pipefd[1]);
+        descriptor::Native fd = ::socket(AF_UNIX, SOCK_STREAM/*|SOCK_NONBLOCK*/, 0);
+        EXPECT_GT(fd, descriptor::Native{0});
+#ifdef _WIN32
+        ::closesocket(fd);
+#else
+        ::close(fd);
+#endif
 
-        Descriptor d(pipefd[0]);
+        Descriptor d{fd};
 
         EXPECT_FALSE(d.valid());
         EXPECT_TRUE(d.error());
 
         bool callbackActivated{};
 
-        d.onAct() += [&](int /*fd*/, std::uint_fast32_t readyState)
+        d.ready() += [&](descriptor::Native /*native*/, descriptor::ReadyStateFlags readyState)
         {
-            EXPECT_TRUE(readyState & Descriptor::rsf_error);
+            EXPECT_TRUE(readyState & descriptor::rsf_error);
             EXPECT_TRUE(0 == d.readyState());
             callbackActivated = true;
         };
-        d.emitActIfNeed();
+        d.emitReadyIfNeed();
 
         dci::cmt::yield();
         EXPECT_TRUE(callbackActivated);
     };
 
-    complexRun();
+    utils::complexRun();
 }
 
 /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -58,19 +69,19 @@ TEST(poll, descriptor_fd)
     dci::cmt::spawn() += []
     {
         {
-            Descriptor d(-1);
-            EXPECT_EQ(-1, d.fd());
+            Descriptor d{};
+            EXPECT_EQ(descriptor::Native{}, d.native());
         }
 
         {
-            int fd = socket(AF_LOCAL, SOCK_STREAM|SOCK_NONBLOCK, 0);
+            descriptor::Native fd = socket(AF_UNIX, SOCK_STREAM/*|SOCK_NONBLOCK*/, 0);
 
-            Descriptor d(fd);
-            EXPECT_EQ(fd, d.fd());
+            Descriptor d{fd};
+            EXPECT_EQ(fd, d.native());
         }
     };
 
-    complexRun();
+    utils::complexRun();
 }
 
 /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -79,17 +90,17 @@ TEST(poll, descriptor_close)
     //close
     dci::cmt::spawn() += []
     {
-        int fd = socket(AF_LOCAL, SOCK_STREAM|SOCK_NONBLOCK, 0);
+        descriptor::Native fd = socket(AF_UNIX, SOCK_STREAM/*|SOCK_NONBLOCK*/, 0);
 
-        Descriptor d(fd);
+        Descriptor d{fd};
 
         EXPECT_TRUE(d.valid());
         EXPECT_FALSE(d.error());
 
         bool eofNotified = false;
-        d.onAct() += [&](int /*fd*/, std::uint_fast32_t readyState)
+        d.ready() += [&](descriptor::Native /*native*/, descriptor::ReadyStateFlags readyState)
         {
-            EXPECT_TRUE(readyState & Descriptor::rsf_eof);
+            EXPECT_TRUE(readyState & descriptor::rsf_eof);
             eofNotified = true;
         };
 
@@ -99,14 +110,14 @@ TEST(poll, descriptor_close)
         EXPECT_TRUE(eofNotified);
 
 
-        Descriptor d2(fd);//already closed
+        Descriptor d2{fd};//already closed
         EXPECT_TRUE(d2.error());
 
-        EXPECT_TRUE(d2.readyState() & Descriptor::rsf_error);
-        EXPECT_TRUE(d2.readyState() & Descriptor::rsf_eof);
+        EXPECT_TRUE(d2.readyState() & descriptor::rsf_error);
+        EXPECT_TRUE(d2.readyState() & descriptor::rsf_eof);
     };
 
-    complexRun();
+    utils::complexRun();
 }
 
 /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -115,7 +126,7 @@ TEST(poll, descriptor_closeOnDestroy)
     //close on destoy, notification
     dci::cmt::spawn() += []
     {
-        int fd = socket(AF_LOCAL, SOCK_STREAM|SOCK_NONBLOCK, 0);
+        descriptor::Native fd = socket(AF_UNIX, SOCK_STREAM/*|SOCK_NONBLOCK*/, 0);
 
         bool eofNotified = false;
         dci::cmt::task::Owner taskOwner;
@@ -123,9 +134,9 @@ TEST(poll, descriptor_closeOnDestroy)
             Descriptor d
             {
                 fd,
-                [&](int /*fd*/, std::uint_fast32_t readyState)
+                [&](descriptor::Native /*native*/, descriptor::ReadyStateFlags readyState)
                 {
-                    EXPECT_TRUE(readyState & Descriptor::rsf_eof);
+                    EXPECT_TRUE(readyState & descriptor::rsf_eof);
                     eofNotified = true;
                 },
                 &taskOwner
@@ -137,14 +148,14 @@ TEST(poll, descriptor_closeOnDestroy)
         dci::cmt::yield();
         EXPECT_TRUE(eofNotified);
 
-        Descriptor d(fd);//already closed
+        Descriptor d{fd};//already closed
         EXPECT_TRUE(d.error());
 
-        EXPECT_TRUE(d.readyState() & Descriptor::rsf_error);
-        EXPECT_TRUE(d.readyState() & Descriptor::rsf_eof);
+        EXPECT_TRUE(d.readyState() & descriptor::rsf_error);
+        EXPECT_TRUE(d.readyState() & descriptor::rsf_eof);
     };
 
-    complexRun();
+    utils::complexRun();
 }
 
 /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -153,15 +164,15 @@ TEST(poll, descriptor_detach)
     //detach
     dci::cmt::spawn() += []
     {
-        int fd = socket(AF_LOCAL, SOCK_STREAM|SOCK_NONBLOCK, 0);
+        descriptor::Native fd = socket(AF_UNIX, SOCK_STREAM/*|SOCK_NONBLOCK*/, 0);
 
-        Descriptor d(fd);
+        Descriptor d{fd};
         EXPECT_FALSE(d.error());
 
         d.detach();
         EXPECT_TRUE(d.error());
 
-        Descriptor d2(fd);
+        Descriptor d2{fd};
         EXPECT_FALSE(d2.error());
 
         d2.detach();
@@ -170,7 +181,7 @@ TEST(poll, descriptor_detach)
         ::close(fd);
     };
 
-    complexRun();
+    utils::complexRun();
 }
 
 /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -180,21 +191,24 @@ TEST(poll, descriptor_work)
     dci::cmt::spawn() += []
     {
         {
-            int pipefd[2];
-            int i = pipe2(pipefd, O_NONBLOCK);
+            dci::poll::descriptor::Native::Value pipefd[2];
+            int i = utils::pipe(pipefd);
             EXPECT_EQ(i, 0);
 
-            Descriptor d0{pipefd[0]};
-            Descriptor d1{pipefd[1]};
+            Descriptor d0{descriptor::Native{pipefd[0]}};
+            Descriptor d1{descriptor::Native{pipefd[1]}};
             dci::cmt::Event messageDelivered;
 
-            d0.onAct() += [&](int /*fd*/, std::uint_fast32_t readyState)
+            d0.ready() += [&](descriptor::Native /*native*/, descriptor::ReadyStateFlags readyState)
             {
-                if(readyState & Descriptor::rsf_read)
+                if(readyState & descriptor::rsf_read)
                 {
                     char buf[32];
-                    EXPECT_EQ(read(d0, buf, sizeof(buf)), 4);
-
+#ifdef _WIN32
+                    EXPECT_EQ(::recv(d0.native(), buf, sizeof(buf), 0), 4);
+#else
+                    EXPECT_EQ(::read(d0.native(), buf, sizeof(buf)), 4);
+#endif
                     EXPECT_TRUE(std::string("msg") == buf);
 
                     messageDelivered.raise();
@@ -202,13 +216,17 @@ TEST(poll, descriptor_work)
 
             };
 
-            EXPECT_EQ(write(d1, "msg", 4), 4);
+#ifdef _WIN32
+            EXPECT_EQ(::send(d1.native(), "msg", 4, 0), 4);
+#else
+            EXPECT_EQ(::write(d1.native(), "msg", 4), 4);
+#endif
 
             messageDelivered.wait();
         }
     };
 
-    complexRun();
+    utils::complexRun();
 }
 
 /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -218,12 +236,12 @@ TEST(poll, descriptor_raisable)
     dci::cmt::spawn() += []
     {
         {
-            int pipefd[2];
-            int i = pipe2(pipefd, O_NONBLOCK);
+            dci::poll::descriptor::Native::Value pipefd[2];
+            int i = utils::pipe(pipefd);
             EXPECT_EQ(i, 0);
 
-            Descriptor d0{pipefd[0]};
-            Descriptor d1{pipefd[1]};
+            Descriptor d0{descriptor::Native{pipefd[0]}};
+            Descriptor d1{descriptor::Native{pipefd[1]}};
             dci::cmt::Notifier notifier0;
             dci::cmt::Notifier notifier1;
 
@@ -233,12 +251,16 @@ TEST(poll, descriptor_raisable)
             EXPECT_FALSE(notifier0.isRaised());
             EXPECT_FALSE(notifier1.isRaised());
 
-            EXPECT_EQ(write(d1, "msg", 4), 4);
+#ifdef _WIN32
+            EXPECT_EQ(::send(d1.native(), "msg", 4, 0), 4);
+#else
+            EXPECT_EQ(::write(d1.native(), "msg", 4), 4);
+#endif
 
             notifier0.wait();
-            EXPECT_TRUE(d0.readyState() & Descriptor::ReadyStateFlags::rsf_read);
+            EXPECT_TRUE(d0.readyState() & descriptor::rsf_read);
         }
     };
 
-    complexRun();
+    utils::complexRun();
 }

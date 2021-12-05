@@ -5,51 +5,73 @@
    of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
    You should have received a copy of the GNU Affero General Public License along with this program. If not, see <https://www.gnu.org/licenses/>. */
 
-#include <dci/poll/functions.hpp>
-#include <dci/poll/error.hpp>
-#include "impl/service.hpp"
+#include <dci/poll/awaker.hpp>
+#include "impl/awaker.hpp"
 
 namespace dci::poll
 {
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    std::error_code initialize()
+    Awaker::Awaker(bool keepLoop)
+        : himpl::FaceLayout<Awaker, impl::Awaker>{nullptr, nullptr, keepLoop}
     {
-        return impl::service.initialize();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    std::error_code run(bool emitStartedStopped)
+    Awaker::Awaker(cmt::task::Owner* wokenOwner, bool keepLoop)
+        : himpl::FaceLayout<Awaker, impl::Awaker>{wokenOwner, nullptr, keepLoop}
     {
-        return impl::service.run(emitStartedStopped);
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    sbs::Signal<> started()
+    Awaker::Awaker(cmt::Raisable* raisable, bool keepLoop)
+        : himpl::FaceLayout<Awaker, impl::Awaker>{nullptr, raisable, keepLoop}
     {
-        return impl::service.started();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    sbs::Signal<> workPossible()
+    Awaker::~Awaker()
     {
-        return impl::service.workPossible();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    std::error_code stop()
+    bool Awaker::keepLoop() const
     {
-        return impl::service.stop();
+        return impl().keepLoop();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    sbs::Signal<> stopped()
+    sbs::Signal<> Awaker::woken()
     {
-        return impl::service.stopped();
+        return impl().woken();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    std::error_code deinitialize()
+    void Awaker::setWokenOwner(cmt::task::Owner* wokenOwner)
     {
-        return impl::service.deinitialize();
+        return impl().setWokenOwner(wokenOwner);
+    }
+
+    /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
+    void Awaker::resetWokenOwner()
+    {
+        return impl().resetWokenOwner();
+    }
+
+    /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
+    void Awaker::setRaisable(cmt::Raisable* raisable)
+    {
+        return impl().setRaisable(raisable);
+    }
+
+    /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
+    void Awaker::resetRaisable()
+    {
+        return impl().resetRaisable();
+    }
+
+    /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
+    void Awaker::wakeup()
+    {
+        return impl().wakeup();
     }
 }

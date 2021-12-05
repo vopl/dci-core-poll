@@ -46,6 +46,10 @@ namespace dci::poll
                     return "not stopped";
                 case error::bad_descriptor:
                     return "bad descriptor";
+                case error::already_installed:
+                    return "already installed";
+                case error::not_installed:
+                    return "not installed";
                 }
 
                 return "dci.poll.general error";

@@ -164,7 +164,7 @@ namespace dci::poll::impl::clocking
                 if(!child)
                 {
                     PointRep childStart = _start + (DurationRep(1)<<childOrder);
-                    child.reset(new Bucket(_globalAmountPtr, childOrder, childStart));
+                    child.reset(new Bucket{_globalAmountPtr, childOrder, childStart});
                 }
 
                 targetBucket = child.get();

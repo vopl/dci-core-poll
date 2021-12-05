@@ -23,7 +23,8 @@ namespace dci::poll::impl::polling
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
     Epoll::~Epoll()
     {
-        interrupt();
+        wakeup();
+	deinitialize();
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -40,9 +41,9 @@ namespace dci::poll::impl::polling
             return std::error_code{errno, std::generic_category()};
         }
 
-        _interruptEvent = eventfd(1, EFD_NONBLOCK|EFD_CLOEXEC);
+        _wakeupEvent = eventfd(1, EFD_NONBLOCK|EFD_CLOEXEC);
 
-        if(0 > _interruptEvent)
+        if(0 > _wakeupEvent)
         {
             int err = errno;
             deinitialize();
@@ -50,17 +51,17 @@ namespace dci::poll::impl::polling
         }
 
         epoll_event evt{0,{nullptr}};
-        evt.data.fd = _interruptEvent;
+        evt.data.fd = _wakeupEvent;
         evt.events = EPOLLIN | EPOLLOUT | EPOLLET;
 
-        if(epoll_ctl(_fd, EPOLL_CTL_ADD, _interruptEvent, &evt))
+        if(epoll_ctl(_fd, EPOLL_CTL_ADD, _wakeupEvent, &evt))
         {
             int err = errno;
             deinitialize();
             return std::error_code(err, std::generic_category());
         }
 
-        return std::error_code{};
+        return {};
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -76,23 +77,23 @@ namespace dci::poll::impl::polling
         evt.data.ptr = d;
         evt.events = EPOLLIN | EPOLLOUT | EPOLLPRI | EPOLLET;
 
-        if(epoll_ctl(_fd, EPOLL_CTL_ADD, d->fd(), &evt))
+        if(epoll_ctl(_fd, EPOLL_CTL_ADD, d->native(), &evt))
         {
             return std::error_code{errno, std::generic_category()};
         }
 
-        return std::error_code{};
+        return {};
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
     std::error_code Epoll::uninstallDescriptor(Descriptor* d)
     {
-        if(epoll_ctl(_fd, EPOLL_CTL_DEL, d->fd(), nullptr))
+        if(epoll_ctl(_fd, EPOLL_CTL_DEL, d->native(), nullptr))
         {
             return std::error_code{errno, std::generic_category()};
         }
 
-        return std::error_code{};
+        return {};
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -124,20 +125,21 @@ namespace dci::poll::impl::polling
         {
             epoll_event& evt = eventsBuffer[idx];
 
-            std::uint_fast32_t readyState =
-                    ((evt.events & (EPOLLIN))               ? static_cast<std::uint_fast32_t>(poll::Descriptor::rsf_read ) : 0) |
-                    ((evt.events & (EPOLLPRI))              ? static_cast<std::uint_fast32_t>(poll::Descriptor::rsf_pri )  : 0) |
-                    ((evt.events & (EPOLLOUT))              ? static_cast<std::uint_fast32_t>(poll::Descriptor::rsf_write) : 0) |
-                    ((evt.events & (EPOLLERR))              ? static_cast<std::uint_fast32_t>(poll::Descriptor::rsf_error) : 0) |
-                    ((evt.events & (EPOLLHUP|EPOLLRDHUP))   ? static_cast<std::uint_fast32_t>(poll::Descriptor::rsf_eof  ) : 0) |
-                    0;
+            using RSF = descriptor::ReadyStateFlags;
+            RSF readyState =
+                    ((evt.events & (EPOLLIN))               ? RSF::rsf_read  : RSF::rsf_null) |
+                    ((evt.events & (EPOLLPRI))              ? RSF::rsf_pri   : RSF::rsf_null) |
+                    ((evt.events & (EPOLLOUT))              ? RSF::rsf_write : RSF::rsf_null) |
+                    ((evt.events & (EPOLLERR))              ? RSF::rsf_error : RSF::rsf_null) |
+                    ((evt.events & (EPOLLHUP|EPOLLRDHUP))   ? RSF::rsf_eof   : RSF::rsf_null) |
+                    RSF::rsf_null;
 
-            if(_interruptEvent == evt.data.fd)
+            if(_wakeupEvent == evt.data.fd)
             {
-                if(poll::Descriptor::rsf_read & readyState)
+                if(RSF::rsf_read & readyState)
                 {
                     eventfd_t value;
-                    eventfd_read(_interruptEvent, &value);
+                    eventfd_read(_wakeupEvent, &value);
                 }
             }
             else
@@ -147,25 +149,25 @@ namespace dci::poll::impl::polling
             }
         }
 
-        return std::error_code{};
+        return {};
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    std::error_code Epoll::interrupt()
+    std::error_code Epoll::wakeup()
     {
         if(-1 == _fd)
         {
             return error::not_initialized;
         }
 
-        int res = eventfd_write(_interruptEvent, 1);
+        int res = eventfd_write(_wakeupEvent, 1);
 
         if(0 > res)
         {
             return std::error_code{errno, std::generic_category()};
         }
 
-        return std::error_code{};
+        return {};
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
@@ -177,13 +179,13 @@ namespace dci::poll::impl::polling
         }
 
         {
-            int closeRes = ::close(_interruptEvent);
+            int closeRes = ::close(_wakeupEvent);
             while(0 != closeRes && EINTR == errno)
             {
                 //try again
-                closeRes = ::close(_interruptEvent);
+                closeRes = ::close(_wakeupEvent);
             }
-            _interruptEvent = -1;
+            _wakeupEvent = -1;
         }
 
         std::error_code ec;

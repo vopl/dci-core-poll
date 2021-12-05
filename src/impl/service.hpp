@@ -9,14 +9,9 @@
 
 #include "polling.hpp"
 #include "clocking.hpp"
-#include <memory>
+#include "awaking.hpp"
 #include <system_error>
-#include <functional>
-#include <chrono>
-#include <map>
 #include <dci/sbs/wire.hpp>
-#include <dci/cmt/functions.hpp>
-#include <dci/utils/dbg.hpp>
 
 namespace dci::poll::impl
 {
@@ -28,10 +23,11 @@ namespace dci::poll::impl
 
     public:
         std::error_code initialize();
-        std::error_code run();
-        sbs::Signal<>   onWorkPossible();
-        void            interrupt();
+        std::error_code run(bool emitStartedStopped);
+        sbs::Signal<>   started();
+        sbs::Signal<>   workPossible();
         std::error_code stop();
+        sbs::Signal<>   stopped();
         std::error_code deinitialize();
 
     private:
@@ -43,11 +39,19 @@ namespace dci::poll::impl
         Polling& polling();
 
     private:
+        friend class Awaker;
+        Awaking& awaking();
+
+    private:
         Clocking    _clocking;
         Polling     _polling;
-        sbs::Wire<> _onWorkPossible;
+        Awaking     _awaking;
+
+        sbs::Wire<> _started;
+        sbs::Wire<> _workPossible;
+        sbs::Wire<> _stopped;
         bool        _stop{true};
     };
 
-    extern Service service;
+    extern Service& service;
 }

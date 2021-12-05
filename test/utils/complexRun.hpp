@@ -5,23 +5,28 @@
    of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
    You should have received a copy of the GNU Affero General Public License along with this program. If not, see <https://www.gnu.org/licenses/>. */
 
+#pragma once
+
 #include <dci/test.hpp>
 #include <dci/poll.hpp>
 #include <dci/cmt.hpp>
 #include <dci/sbs.hpp>
 
-inline void complexRun()
+namespace utils
 {
-    EXPECT_FALSE(dci::poll::initialize());
-
+    inline void complexRun()
     {
-        dci::sbs::Owner onWorkPossibleOwner;
-        dci::poll::onWorkPossible() += onWorkPossibleOwner * [&]
-        {
-            dci::cmt::executeReadyFibers();
-        };
-        EXPECT_FALSE(dci::poll::run());
-    }
+        EXPECT_FALSE(dci::poll::initialize());
 
-    EXPECT_FALSE(dci::poll::deinitialize());
+        {
+            dci::sbs::Owner workPossibleOwner;
+            dci::poll::workPossible() += workPossibleOwner * [&]
+            {
+                dci::cmt::executeReadyFibers();
+            };
+            EXPECT_FALSE(dci::poll::run());
+        }
+
+        EXPECT_FALSE(dci::poll::deinitialize());
+    }
 }
