@@ -21,6 +21,7 @@ namespace dci::poll
         WaitableTimer(std::chrono::milliseconds interval);
         WaitableTimer(std::chrono::milliseconds interval, bool repeatable);
 
+        RaisableAndWaitable& raisableAndWaitable();
         dci::cmt::Waitable& waitable();
         void wait();
 
@@ -40,6 +41,13 @@ namespace dci::poll
     WaitableTimer<RaisableAndWaitable>::WaitableTimer(std::chrono::milliseconds interval, bool repeatable)
         : Timer{interval, repeatable, &_raisableAndWaitable}
     {
+    }
+
+    /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
+    template <class RaisableAndWaitable>
+    RaisableAndWaitable& WaitableTimer<RaisableAndWaitable>::raisableAndWaitable()
+    {
+        return _raisableAndWaitable;
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
