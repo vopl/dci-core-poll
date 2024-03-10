@@ -12,4 +12,5 @@
 #include "poll/descriptor.hpp"
 #include "poll/timer.hpp"
 #include "poll/waitableTimer.hpp"
+#include "poll/timeout.hpp"
 #include "poll/awaker.hpp"
