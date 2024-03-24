@@ -75,7 +75,7 @@ namespace dci::poll::impl::polling
     {
         epoll_event evt{0,{nullptr}};
         evt.data.ptr = d;
-        evt.events = EPOLLIN | EPOLLOUT | EPOLLPRI | EPOLLET;
+        evt.events = EPOLLIN | EPOLLOUT | EPOLLPRI | EPOLLHUP | EPOLLRDHUP | EPOLLET;
 
         if(epoll_ctl(_fd, EPOLL_CTL_ADD, d->native(), &evt))
         {
