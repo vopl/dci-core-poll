@@ -69,7 +69,16 @@ namespace dci::poll::impl
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
     void Descriptor::emitReadyIfNeed()
     {
-        if(_readyState && _ready && _ready->_wire.connected() && !_ready->_inProgress)
+        if(ReadyStateFlags::rsf_null != _readyState && !_ready->_inProgress)
+        {
+            emitReady();
+        }
+    }
+
+    /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
+    void Descriptor::emitReady()
+    {
+        if(_ready && _ready->_wire.connected())
         {
             ReadyStateFlags readyState = _readyState;
             _readyState = {};

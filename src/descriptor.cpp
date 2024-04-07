@@ -46,6 +46,12 @@ namespace dci::poll
     }
 
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
+    void Descriptor::emitReady()
+    {
+        return impl().emitReady();
+    }
+
+    /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
     void Descriptor::setReadyOwner(cmt::task::Owner* actOwner)
     {
         return impl().setReadyOwner(actOwner);

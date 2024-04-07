@@ -37,6 +37,7 @@ namespace dci::poll
 
         sbs::Signal<void, Native /*native*/, ReadyStateFlags /*readyState*/> ready();
         void emitReadyIfNeed();
+        void emitReady();
 
         void setReadyOwner(cmt::task::Owner* readyOwner);
         void resetReadyOwner();
