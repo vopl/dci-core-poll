@@ -171,7 +171,7 @@ namespace dci::poll::impl
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
     namespace
     {
-        std::aligned_storage_t<sizeof(Service), alignof(Service)> servicePlace;
+        alignas(Service) std::byte servicePlace[sizeof(Service)];
     }
 
     Service& service{*(new (&servicePlace) Service)};
