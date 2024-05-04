@@ -13,22 +13,22 @@
 namespace dci::poll
 {
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    template<class Rep, class Period>
+    template<class Rep, class Period, class RaisableAndWaitable = dci::cmt::Event>
     auto timeout(std::chrono::duration<Rep, Period> interval);
 }
 
 namespace dci::poll
 {
     /////////0/////////1/////////2/////////3/////////4/////////5/////////6/////////7
-    template<class Rep, class Period>
+    template<class Rep, class Period, class RaisableAndWaitable>
     auto timeout(std::chrono::duration<Rep, Period> interval)
     {
-        struct Timeout : WaitableTimer<cmt::Event>
+        struct Timeout : WaitableTimer<RaisableAndWaitable>
         {
             Timeout(std::chrono::milliseconds interval)
-                : WaitableTimer<cmt::Event>{interval}
+                : WaitableTimer<RaisableAndWaitable>{interval}
             {
-                start();
+                this->start();
             }
         };
         return Timeout{std::chrono::duration_cast<std::chrono::milliseconds>(interval)};
